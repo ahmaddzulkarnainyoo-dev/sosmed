@@ -46,6 +46,8 @@ Make sure to add the following environment variables to your Vercel project:
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 
+If you want image upload to work, create a Supabase Storage bucket named `post-images` and make it public or configure public URL access.
+
 Your project uses Supabase for auth and database access, so the app must be connected to a Supabase project with the schema defined in `supabase/schema.sql`.
 
 Check out the [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.

@@ -68,6 +68,18 @@ export default function Navbar() {
           </Link>
 
           <Link
+            href="/notifications"
+            className={`flex flex-col sm:flex-row items-center gap-1 px-3 py-2 rounded-lg text-xs transition-colors ${
+              isActive("/notifications")
+                ? "text-violet-400 bg-violet-500/10"
+                : "text-white/60 hover:text-white/80 hover:bg-white/5"
+            }`}
+          >
+            <span>🔔</span>
+            <span className="hidden sm:inline">Notifikasi</span>
+          </Link>
+
+          <Link
             href="/messages"
             className={`relative flex flex-col sm:flex-row items-center gap-1 px-3 py-2 rounded-lg text-xs transition-colors ${
               isActive("/messages")

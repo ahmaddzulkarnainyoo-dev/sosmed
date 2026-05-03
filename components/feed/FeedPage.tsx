@@ -178,6 +178,9 @@ export default function FeedPage({ currentUserId }: { currentUserId: string }) {
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState("");
   const [imageUrl, setImageUrl] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadError, setUploadError] = useState("");
   const [profile, setProfile] = useState<Profile | null>(null);
   const [postType, setPostType] = useState<"post" | "announcement">("post");
   const [isAdmin, setIsAdmin] = useState(false);
@@ -189,6 +192,33 @@ export default function FeedPage({ currentUserId }: { currentUserId: string }) {
   const username = profile?.username ?? "Himlab Member";
   const announcementCount = posts.filter((post) => post.type === "announcement").length;
   const postButtonDisabled = !draft.trim() || saving;
+
+  const handleImageUpload = async (file: File) => {
+    setUploadingImage(true);
+    setUploadError("");
+
+    const filePath = `post-images/${currentUserId}/${Date.now()}_${file.name}`;
+    const { data, error } = await supabase.storage.from("post-images").upload(filePath, file, {
+      cacheControl: "3600",
+      upsert: true,
+    });
+
+    if (error || !data) {
+      setUploadError("Gagal mengunggah gambar. Pastikan bucket `post-images` sudah dibuat di Supabase.");
+      setUploadingImage(false);
+      return;
+    }
+
+    const { data: publicUrl } = supabase.storage.from("post-images").getPublicUrl(filePath);
+    if (publicUrl?.publicUrl) {
+      setImageUrl(publicUrl.publicUrl);
+      setSelectedFile(file);
+    } else {
+      setUploadError("Gagal mendapatkan URL gambar. Cek konfigurasi storage.");
+    }
+
+    setUploadingImage(false);
+  };
 
   const loadProfile = async () => {
     const {
@@ -310,6 +340,7 @@ export default function FeedPage({ currentUserId }: { currentUserId: string }) {
 
     setDraft("");
     setImageUrl("");
+    setSelectedFile(null);
     await fetchFeed();
     setSaving(false);
   };
@@ -377,6 +408,39 @@ export default function FeedPage({ currentUserId }: { currentUserId: string }) {
               placeholder="Link gambar (opsional)"
               className="w-full rounded-3xl border border-white/10 bg-slate-950/95 px-4 py-3 text-sm text-white outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-400/20"
             />
+            <label className="block text-xs font-medium text-white/40">
+              Upload gambar untuk posting
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) {
+                    handleImageUpload(file);
+                  }
+                }}
+                className="mt-2 w-full text-sm text-white/80 file:cursor-pointer file:rounded-full file:border-0 file:bg-violet-500 file:px-4 file:py-2 file:text-sm file:text-white hover:file:bg-violet-400"
+              />
+            </label>
+            {uploadError && <p className="text-sm text-rose-300">{uploadError}</p>}
+            {imageUrl && (
+              <div className="rounded-3xl overflow-hidden border border-white/10 bg-slate-950/90 p-2">
+                <div className="flex items-center justify-between gap-2 mb-2 text-xs text-white/40">
+                  <span>Preview gambar</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setImageUrl("");
+                      setSelectedFile(null);
+                    }}
+                    className="text-white/40 hover:text-white"
+                  >
+                    Hapus
+                  </button>
+                </div>
+                <img src={imageUrl} alt="Preview" className="w-full max-h-56 object-cover rounded-2xl" />
+              </div>
+            )}
             {isAdmin ? (
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="flex items-center gap-2 rounded-3xl border border-white/10 bg-slate-950/90 px-4 py-3 text-sm text-white/80 transition-colors hover:border-violet-500 cursor-pointer">
