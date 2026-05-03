@@ -179,12 +179,15 @@ export default function FeedPage({ currentUserId }: { currentUserId: string }) {
   const [draft, setDraft] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [postType, setPostType] = useState<"post" | "announcement">("post");
+  const [isAdmin, setIsAdmin] = useState(false);
   const paperDate = new Date().getFullYear().toString();
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const router = useRouter();
 
   const username = profile?.username ?? "Himlab Member";
+  const announcementCount = posts.filter((post) => post.type === "announcement").length;
   const postButtonDisabled = !draft.trim() || saving;
 
   const loadProfile = async () => {
@@ -218,18 +221,9 @@ export default function FeedPage({ currentUserId }: { currentUserId: string }) {
         angkatan: (profileData as any).angkatan ?? paperDate,
       };
       setProfile(safeProfile);
+      setIsAdmin(safeProfile.role === "admin");
       return;
     }
-
-    const fallbackName = user.email?.split("@")[0] ?? user.id.slice(0, 6);
-    setProfile({
-      id: user.id,
-      full_name: fallbackName,
-      username: fallbackName,
-      avatar_url: null,
-      role: "member",
-      angkatan: new Date().getFullYear().toString(),
-    });
   };
 
   const createPostObject = (record: any): Post => {
@@ -281,7 +275,15 @@ export default function FeedPage({ currentUserId }: { currentUserId: string }) {
       return;
     }
 
-    setPosts(data.map(createPostObject));
+    const sortedPosts = data.map(createPostObject).sort((a, b) => {
+      if (a.type === b.type) {
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      }
+      if (a.type === "announcement") return -1;
+      if (b.type === "announcement") return 1;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+    setPosts(sortedPosts);
     setLoading(false);
   };
 
@@ -296,7 +298,7 @@ export default function FeedPage({ currentUserId }: { currentUserId: string }) {
       author_id: currentUserId,
       content: draft.trim(),
       image_url: imageUrl?.trim() || null,
-      type: "post",
+      type: isAdmin ? postType : "post",
     };
 
     const { error } = await supabase.from("posts").insert(payload);
@@ -322,6 +324,8 @@ export default function FeedPage({ currentUserId }: { currentUserId: string }) {
     fetchFeed();
   }, []);
 
+  const announcements = posts.filter((post) => post.type === "announcement");
+  const feedPosts = posts.filter((post) => post.type !== "announcement");
   const ic = useMemo(() => initials(profile?.full_name ?? "Himlab"), [profile]);
 
   return (
@@ -331,10 +335,13 @@ export default function FeedPage({ currentUserId }: { currentUserId: string }) {
         <div className="absolute bottom-1/3 right-1/4 w-72 h-72 bg-amber-500/6 rounded-full blur-3xl" />
       </div>
       <div className="relative max-w-xl mx-auto px-4 py-6">
-        <header className="flex items-center justify-between mb-6 gap-4">
+        <header className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
           <div>
             <h1 className="text-xl font-bold text-white/95 tracking-tight">Himlab</h1>
             <p className="text-xs text-white/40 mt-0.5">Himlab Raya · Komunitas Kampus</p>
+            {announcementCount > 0 && (
+              <p className="text-xs text-amber-300/80 mt-2">{announcementCount} pengumuman organisasi disematkan di atas feed.</p>
+            )}
           </div>
           <button
             type="button"
@@ -370,6 +377,34 @@ export default function FeedPage({ currentUserId }: { currentUserId: string }) {
               placeholder="Link gambar (opsional)"
               className="w-full rounded-3xl border border-white/10 bg-slate-950/95 px-4 py-3 text-sm text-white outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-400/20"
             />
+            {isAdmin ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="flex items-center gap-2 rounded-3xl border border-white/10 bg-slate-950/90 px-4 py-3 text-sm text-white/80 transition-colors hover:border-violet-500 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="postType"
+                    value="post"
+                    checked={postType === "post"}
+                    onChange={() => setPostType("post")}
+                    className="accent-violet-500"
+                  />
+                  Posting biasa
+                </label>
+                <label className="flex items-center gap-2 rounded-3xl border border-white/10 bg-slate-950/90 px-4 py-3 text-sm text-white/80 transition-colors hover:border-amber-500 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="postType"
+                    value="announcement"
+                    checked={postType === "announcement"}
+                    onChange={() => setPostType("announcement")}
+                    className="accent-amber-500"
+                  />
+                  Pengumuman organisasi
+                </label>
+              </div>
+            ) : (
+              <p className="text-xs text-white/40">Hanya admin dapat membuat pengumuman resmi.</p>
+            )}
             {errorMessage && <p className="text-sm text-rose-300">{errorMessage}</p>}
             <div className="flex items-center justify-between gap-3">
               <span className="text-xs text-white/40">Maksimal 300 karakter</span>
@@ -383,6 +418,34 @@ export default function FeedPage({ currentUserId }: { currentUserId: string }) {
             </div>
           </form>
         </div>
+
+        {announcements.length > 0 && (
+          <div className="mb-4 space-y-3">
+            <div className="rounded-3xl border border-amber-500/20 bg-amber-500/10 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-amber-200">Papan Pengumuman</p>
+                  <p className="text-xs text-amber-100/70 mt-1">Pengumuman penting khusus anggota.</p>
+                </div>
+                <span className="text-[11px] uppercase tracking-[0.15em] text-amber-200/80">{announcements.length} pengumuman</span>
+              </div>
+            </div>
+            {announcements.map((post) => (
+              <div key={post.id} className="rounded-3xl border border-amber-500/20 bg-[#1f1b16] p-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-full bg-amber-500/20 ring-1 ring-amber-500/30 flex items-center justify-center text-sm font-semibold text-amber-200">
+                    {initials(post.author.full_name)}
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-white/90">{post.author.full_name}</p>
+                    <p className="text-xs text-white/40">@{post.author.username} · {timeAgo(post.created_at)}</p>
+                  </div>
+                </div>
+                <p className="text-sm text-white/80 leading-relaxed">{post.content}</p>
+              </div>
+            ))}
+          </div>
+        )}
 
         {loading ? (
           <div className="space-y-3">
@@ -405,16 +468,16 @@ export default function FeedPage({ currentUserId }: { currentUserId: string }) {
         ) : (
           <motion.div className="space-y-3" animate="animate">
             <AnimatePresence>
-              {posts.map((post) => (
+              {feedPosts.map((post) => (
                 <PostCard key={post.id} post={post} currentUserId={currentUserId} />
               ))}
             </AnimatePresence>
-            {posts.length === 0 && (
+            {feedPosts.length === 0 ? (
               <div className="text-center py-16 text-white/30">
-                <p className="text-sm">Belum ada postingan.</p>
-                <p className="text-xs mt-1">Jadilah yang pertama berbagi.</p>
+                <p className="text-sm">Belum ada postingan biasa.</p>
+                <p className="text-xs mt-1">Silakan lihat pengumuman jika sudah ada, atau mulai berbagi.</p>
               </div>
-            )}
+            ) : null}
           </motion.div>
         )}
       </div>

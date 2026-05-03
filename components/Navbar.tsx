@@ -19,7 +19,7 @@ export default function Navbar() {
 
       const { count } = await supabase
         .from("direct_messages")
-        .select("id", { count: "exact", head: 0 })
+        .select("id", { count: "exact", head: true })
         .eq("receiver_id", user.id)
         .eq("is_read", false);
 

@@ -11,11 +11,17 @@ type Comment = {
   user_id: string;
   content: string;
   created_at: string;
+  parent_comment_id?: string | null;
   user?: { id: string; full_name: string; username: string; avatar_url: string | null; role: string };
   replies?: Comment[];
   like_count?: number;
   is_liked?: boolean;
 };
+
+function normalizeUser(user: any) {
+  if (!user) return undefined;
+  return Array.isArray(user) ? user[0] ?? undefined : user;
+}
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -206,6 +212,13 @@ export default function Comments({ postId, currentUserId }: CommentsProps) {
       // Fetch nested replies for each comment
       const commentsWithReplies = await Promise.all(
         data.map(async (comment) => {
+          const baseComment: Comment = {
+            ...comment,
+            user: normalizeUser(comment.user),
+            like_count: comment.like_count?.[0]?.count || 0,
+            replies: [],
+          };
+
           const { data: replies } = await supabase
             .from("comments")
             .select(
@@ -218,10 +231,16 @@ export default function Comments({ postId, currentUserId }: CommentsProps) {
             .eq("parent_comment_id", comment.id)
             .order("created_at", { ascending: true });
 
+          const normalizedReplies: Comment[] = (replies || []).map((reply: any) => ({
+            ...reply,
+            user: normalizeUser(reply.user),
+            like_count: reply.like_count?.[0]?.count || 0,
+            replies: [],
+          }));
+
           return {
-            ...comment,
-            replies: replies || [],
-            like_count: comment.like_count?.[0]?.count || 0,
+            ...baseComment,
+            replies: normalizedReplies,
           };
         })
       );
