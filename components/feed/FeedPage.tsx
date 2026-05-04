@@ -1,36 +1,24 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
-import Comments from "@/components/Comments";
 
 const supabase = createClient();
 
-type Profile = {
-  id: string;
-  full_name: string;
-  username: string;
-  avatar_url: string | null;
-  role: "member" | "alumni" | "admin";
-  angkatan: string;
-};
-
-type Post = {
+type Comment = {
   id: string;
   content: string;
-  image_url: string | null;
-  type: "post" | "announcement" | "story";
-  view_count: number;
   created_at: string;
-  author: Profile;
-  _count: { likes: number; comments: number };
-  is_liked: boolean;
-  like_count?: number;
+  author: {
+    id: string;
+    full_name: string;
+    username: string;
+    avatar_url: string | null;
+    role: string;
+  };
 };
 
-function timeAgo(dateStr: string): string {
+function timeAgo(dateStr: string) {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return "baru saja";
@@ -40,511 +28,110 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(hrs / 24)}h`;
 }
 
-function initials(name: string): string {
-  return name
-    .split(" ")
-    .slice(0, 2)
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase();
+function initials(name: string) {
+  return name.split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase();
 }
 
-function Avatar({ profile, size = 40 }: { profile: Profile; size?: number }) {
-  const roleColor: Record<string, string> = {
-    alumni: "bg-amber-500/20 text-amber-400 ring-amber-500/30",
-    member: "bg-violet-500/20 text-violet-400 ring-violet-500/30",
-    admin: "bg-emerald-500/20 text-emerald-400 ring-emerald-500/30",
-  };
-  return (
-    <div
-      className={`relative flex items-center justify-center rounded-full font-semibold ring-1 ${roleColor[profile.role]}`}
-      style={{ width: size, height: size, fontSize: size * 0.35 }}
-    >
-      {profile.avatar_url ? (
-        <img src={profile.avatar_url} alt={profile.full_name} className="w-full h-full rounded-full object-cover" />
-      ) : (
-        initials(profile.full_name)
-      )}
-    </div>
-  );
-}
-
-function RoleBadge({ role }: { role: Profile["role"] }) {
-  const map = {
-    alumni: { label: "Alumni", cls: "bg-amber-500/10 text-amber-400 border-amber-500/20" },
-    member: { label: "Anggota", cls: "bg-violet-500/10 text-violet-400 border-violet-500/20" },
-    admin: { label: "Admin", cls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" },
-  };
-  const { label, cls } = map[role];
-  return (
-    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border ${cls}`}>
-      {label}
-    </span>
-  );
-}
-
-function PostCard({ post, currentUserId }: { post: Post; currentUserId: string }) {
-  const [liked, setLiked] = useState(post.is_liked);
-  const [likeCount, setLikeCount] = useState(post.like_count ?? post._count.likes);
-  const [showComments, setShowComments] = useState(false);
-
-  async function handleLike() {
-    if (!currentUserId) return;
-
-    if (liked) {
-      await supabase.from("likes").delete().match({ post_id: post.id, user_id: currentUserId });
-      setLikeCount((p) => Math.max(0, p - 1));
-    } else {
-      await supabase.from("likes").insert({ post_id: post.id, user_id: currentUserId });
-      setLikeCount((p) => p + 1);
-    }
-    setLiked((p) => !p);
-  }
-
-  const isAnnouncement = post.type === "announcement";
-
-  return (
-    <motion.article
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
-      className={`relative overflow-hidden rounded-2xl border transition-colors duration-200 ${
-        isAnnouncement ? "bg-amber-500/5 border-amber-500/20" : "bg-white/5 border-white/10 hover:bg-white/[0.08]"
-      }`}
-    >
-      {isAnnouncement && (
-        <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-amber-500/60 via-amber-400/40 to-transparent" />
-      )}
-      <div className="p-4">
-        <div className="flex items-start gap-3 mb-3">
-          <Avatar profile={post.author} size={38} />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm font-semibold text-white/90 truncate">{post.author.full_name}</span>
-              <RoleBadge role={post.author.role} />
-            </div>
-            <div className="flex items-center gap-1.5 mt-0.5 text-xs text-white/40">
-              <span>@{post.author.username}</span>
-              <span className="text-white/20">·</span>
-              <span>{post.author.angkatan}</span>
-              <span className="text-white/20">·</span>
-              <span>{timeAgo(post.created_at)}</span>
-            </div>
-          </div>
-        </div>
-        <p className="text-sm text-white/80 leading-relaxed mb-3">{post.content}</p>
-        {post.image_url && (
-          <div className="mb-3 rounded-xl overflow-hidden">
-            <img src={post.image_url} alt="" className="w-full max-h-80 object-cover" />
-          </div>
-        )}
-        <div className="flex items-center gap-1 pt-1 border-t border-white/5">
-          <motion.button
-            whileTap={{ scale: 0.88 }}
-            onClick={handleLike}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs transition-colors ${
-              liked ? "text-rose-400 bg-rose-500/10" : "text-white/40 hover:text-white/70 hover:bg-white/5"
-            }`}
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill={liked ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
-              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-            </svg>
-            <span>{likeCount > 0 ? likeCount : ""}</span>
-          </motion.button>
-          <motion.button
-            whileTap={{ scale: 0.88 }}
-            onClick={() => setShowComments(!showComments)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs text-white/40 hover:text-white/70 hover:bg-white/5 transition-colors"
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            </svg>
-            <span>{post._count.comments > 0 ? post._count.comments : ""}</span>
-          </motion.button>
-          <button className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs text-white/40 hover:text-white/70 hover:bg-white/5 transition-colors ml-auto">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
-            </svg>
-          </button>
-        </div>
-        {showComments && <Comments postId={post.id} currentUserId={currentUserId} />}
-      </div>
-    </motion.article>
-  );
-}
-
-export default function FeedPage({ currentUserId }: { currentUserId: string }) {
-  const [posts, setPosts] = useState<Post[]>([]);
+export default function Comments({ postId, currentUserId }: { postId: string; currentUserId: string }) {
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [input, setInput] = useState("");
   const [loading, setLoading] = useState(true);
-  const [draft, setDraft] = useState("");
-  const [imageUrl, setImageUrl] = useState("");
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [uploadingImage, setUploadingImage] = useState(false);
-  const [uploadError, setUploadError] = useState("");
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [postType, setPostType] = useState<"post" | "announcement">("post");
-  const [isAdmin, setIsAdmin] = useState(false);
-  const paperDate = new Date().getFullYear().toString();
-  const [saving, setSaving] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
-  const router = useRouter();
-
-  const username = profile?.username ?? "Himlab Member";
-  const announcementCount = posts.filter((post) => post.type === "announcement").length;
-  const postButtonDisabled = !draft.trim() || saving;
-
-  const handleImageUpload = async (file: File) => {
-    setUploadingImage(true);
-    setUploadError("");
-
-    const filePath = `post-images/${currentUserId}/${Date.now()}_${file.name}`;
-    const { data, error } = await supabase.storage.from("post-images").upload(filePath, file, {
-      cacheControl: "3600",
-      upsert: true,
-    });
-
-    if (error || !data) {
-      setUploadError("Gagal mengunggah gambar. Pastikan bucket `post-images` sudah dibuat di Supabase.");
-      setUploadingImage(false);
-      return;
-    }
-
-    const { data: publicUrl } = supabase.storage.from("post-images").getPublicUrl(filePath);
-    if (publicUrl?.publicUrl) {
-      setImageUrl(publicUrl.publicUrl);
-      setSelectedFile(file);
-    } else {
-      setUploadError("Gagal mendapatkan URL gambar. Cek konfigurasi storage.");
-    }
-
-    setUploadingImage(false);
-  };
-
-  const loadProfile = async () => {
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError || !user) {
-      router.push("/");
-      return;
-    }
-
-    const { data: profileData, error: profileError } = await supabase
-      .from("profiles")
-      .select("id, full_name, username, avatar_url, role, angkatan")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    if (profileError) {
-      console.error("Failed to load profile", profileError);
-    }
-
-    if (profileData) {
-      const safeProfile: Profile = {
-        id: profileData.id,
-        full_name: profileData.full_name,
-        username: profileData.username,
-        avatar_url: profileData.avatar_url ?? null,
-        role: (profileData as any).role ?? "member",
-        angkatan: (profileData as any).angkatan ?? paperDate,
-      };
-      setProfile(safeProfile);
-      setIsAdmin(safeProfile.role === "admin");
-      return;
-    }
-  };
-
-  const createPostObject = (record: any): Post => {
-    const author: Profile = record.author ?? {
-      id: record.author_id ?? "",
-      full_name: record.author_full_name ?? profile?.full_name ?? "Himlab User",
-      username: record.author_username ?? profile?.username ?? "himlab",
-      avatar_url: record.author_avatar_url ?? null,
-      role: record.author_role ?? "member",
-      angkatan: record.author_angkatan ?? "2025",
-    };
-
-    return {
-      id: record.id,
-      content: record.content,
-      image_url: record.image_url ?? null,
-      type: record.type ?? "post",
-      view_count: record.view_count ?? 0,
-      created_at: record.created_at,
-      author,
-      _count: {
-        likes: record._count?.likes ?? record.like_count ?? 0,
-        comments: record._count?.comments ?? record.comment_count ?? 0,
-      },
-      is_liked: false,
-      like_count: record.like_count ?? record._count?.likes ?? 0,
-    };
-  };
-
-  const fetchFeed = async () => {
-    setLoading(true);
-    setErrorMessage("");
-
-    const { data, error } = await supabase
-      .from("posts")
-      .select("*, author:profiles!author_id(id, full_name, username, avatar_url, role, angkatan), likes(count), comments(count)")
-      .order("created_at", { ascending: false })
-      .limit(20);
-
-    if (error) {
-      const fallback = await supabase.from("posts").select("*").order("created_at", { ascending: false }).limit(20);
-      if (fallback.error) {
-        setErrorMessage("Tidak bisa memuat feed. Pastikan tabel Supabase sudah dibuat.");
-        setLoading(false);
-        return;
-      }
-      setPosts(fallback.data.map(createPostObject));
-      setLoading(false);
-      return;
-    }
-
-    const sortedPosts = data.map(createPostObject).sort((a, b) => {
-      if (a.type === b.type) {
-        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-      }
-      if (a.type === "announcement") return -1;
-      if (b.type === "announcement") return 1;
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-    });
-    setPosts(sortedPosts);
-    setLoading(false);
-  };
-
-  const handleCreatePost = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!draft.trim()) return;
-
-    setSaving(true);
-    setErrorMessage("");
-
-    const payload = {
-      author_id: currentUserId,
-      content: draft.trim(),
-      image_url: imageUrl?.trim() || null,
-      type: isAdmin ? postType : "post",
-    };
-
-    const { error } = await supabase.from("posts").insert(payload);
-    if (error) {
-      setErrorMessage("Gagal membuat postingan. Pastikan tabel posts ada di Supabase.");
-      setSaving(false);
-      return;
-    }
-
-    setDraft("");
-    setImageUrl("");
-    setSelectedFile(null);
-    await fetchFeed();
-    setSaving(false);
-  };
-
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    router.push("/");
-  };
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    loadProfile();
-    fetchFeed();
-  }, []);
+    fetchComments();
+  }, [postId]);
 
-  const announcements = posts.filter((post) => post.type === "announcement");
-  const feedPosts = posts.filter((post) => post.type !== "announcement");
-  const ic = useMemo(() => initials(profile?.full_name ?? "Himlab"), [profile]);
+  async function fetchComments() {
+    const { data } = await supabase
+      .from("comments")
+      .select("id, content, created_at, author:profiles!author_id(id, full_name, username, avatar_url, role)")
+      .eq("post_id", postId)
+      .order("created_at", { ascending: true });
+    if (data) setComments(data as unknown as Comment[]);
+    setLoading(false);
+  }
+
+  async function submitComment(e: React.FormEvent) {
+    e.preventDefault();
+    if (!input.trim() || submitting) return;
+    setSubmitting(true);
+    const { error } = await supabase.from("comments").insert({
+      post_id: postId,
+      author_id: currentUserId,
+      content: input.trim(),
+    });
+    if (!error) {
+      setInput("");
+      await fetchComments();
+    }
+    setSubmitting(false);
+  }
+
+  async function deleteComment(commentId: string) {
+    await supabase.from("comments").delete().match({ id: commentId, author_id: currentUserId });
+    setComments((prev) => prev.filter((c) => c.id !== commentId));
+  }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0f] text-white">
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-violet-600/8 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/3 right-1/4 w-72 h-72 bg-amber-500/6 rounded-full blur-3xl" />
-      </div>
-      <div className="relative max-w-xl mx-auto px-4 py-6">
-        <header className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
-          <div>
-            <h1 className="text-xl font-bold text-white/95 tracking-tight">Himlab</h1>
-            <p className="text-xs text-white/40 mt-0.5">Himlab Raya · Komunitas Kampus</p>
-            {announcementCount > 0 && (
-              <p className="text-xs text-amber-300/80 mt-2">{announcementCount} pengumuman organisasi disematkan di atas feed.</p>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={handleSignOut}
-            className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-white/90 transition hover:bg-white/10"
-          >
-            Keluar
-          </button>
-        </header>
+    <div className="mt-3 pt-3 border-t border-white/8 space-y-3">
+      {/* Input */}
+      <form onSubmit={submitComment} className="flex gap-2">
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="Tulis komentar..."
+          className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white/80 placeholder-white/25 focus:outline-none focus:border-violet-500/50 transition-all"
+        />
+        <button
+          type="submit"
+          disabled={!input.trim() || submitting}
+          className="px-3 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-30 text-white text-xs font-semibold rounded-xl transition-colors"
+        >
+          Kirim
+        </button>
+      </form>
 
-        <div className="bg-white/5 border border-white/10 rounded-3xl p-4 mb-4 shadow-xl shadow-black/20 backdrop-blur-xl">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-11 h-11 rounded-full bg-violet-500/20 ring-1 ring-violet-500/30 flex items-center justify-center text-sm font-semibold text-violet-300">
-              {ic}
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-white/90">{profile?.full_name ?? "Himlab Member"}</p>
-              <p className="text-xs text-white/40">@{username}</p>
-            </div>
-          </div>
-          <form className="space-y-3" onSubmit={handleCreatePost}>
-            <textarea
-              rows={4}
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              placeholder="Bagikan cerita, pengumuman, atau kabar terbaru..."
-              className="w-full rounded-3xl border border-white/10 bg-slate-950/95 px-4 py-3 text-sm text-white outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-400/20"
-            />
-            <input
-              type="url"
-              value={imageUrl}
-              onChange={(event) => setImageUrl(event.target.value)}
-              placeholder="Link gambar (opsional)"
-              className="w-full rounded-3xl border border-white/10 bg-slate-950/95 px-4 py-3 text-sm text-white outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-400/20"
-            />
-            <label className="block text-xs font-medium text-white/40">
-              Upload gambar untuk posting
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) {
-                    handleImageUpload(file);
-                  }
-                }}
-                className="mt-2 w-full text-sm text-white/80 file:cursor-pointer file:rounded-full file:border-0 file:bg-violet-500 file:px-4 file:py-2 file:text-sm file:text-white hover:file:bg-violet-400"
-              />
-            </label>
-            {uploadError && <p className="text-sm text-rose-300">{uploadError}</p>}
-            {imageUrl && (
-              <div className="rounded-3xl overflow-hidden border border-white/10 bg-slate-950/90 p-2">
-                <div className="flex items-center justify-between gap-2 mb-2 text-xs text-white/40">
-                  <span>Preview gambar</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setImageUrl("");
-                      setSelectedFile(null);
-                    }}
-                    className="text-white/40 hover:text-white"
-                  >
-                    Hapus
-                  </button>
+      {/* List */}
+      {loading ? (
+        <p className="text-xs text-white/30">Memuat komentar...</p>
+      ) : comments.length === 0 ? (
+        <p className="text-xs text-white/25 text-center py-2">Belum ada komentar. Jadilah yang pertama.</p>
+      ) : (
+        <div className="space-y-2">
+          {comments.map((comment) => (
+            <div key={comment.id} className="flex gap-2 group">
+              <div className="w-7 h-7 rounded-full bg-violet-500/20 ring-1 ring-violet-500/20 flex items-center justify-center text-[10px] font-semibold text-violet-300 flex-shrink-0 mt-0.5">
+                {comment.author.avatar_url ? (
+                  <img src={comment.author.avatar_url} className="w-full h-full rounded-full object-cover" alt="" />
+                ) : (
+                  initials(comment.author.full_name)
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="bg-white/5 rounded-xl px-3 py-2">
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <span className="text-xs font-semibold text-white/80">{comment.author.full_name}</span>
+                    <span className="text-[10px] text-white/30">{timeAgo(comment.created_at)}</span>
+                  </div>
+                  <p className="text-xs text-white/70 leading-relaxed">{comment.content}</p>
                 </div>
-                <img src={imageUrl} alt="Preview" className="w-full max-h-56 object-cover rounded-2xl" />
               </div>
-            )}
-            {isAdmin ? (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="flex items-center gap-2 rounded-3xl border border-white/10 bg-slate-950/90 px-4 py-3 text-sm text-white/80 transition-colors hover:border-violet-500 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="postType"
-                    value="post"
-                    checked={postType === "post"}
-                    onChange={() => setPostType("post")}
-                    className="accent-violet-500"
-                  />
-                  Posting biasa
-                </label>
-                <label className="flex items-center gap-2 rounded-3xl border border-white/10 bg-slate-950/90 px-4 py-3 text-sm text-white/80 transition-colors hover:border-amber-500 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="postType"
-                    value="announcement"
-                    checked={postType === "announcement"}
-                    onChange={() => setPostType("announcement")}
-                    className="accent-amber-500"
-                  />
-                  Pengumuman organisasi
-                </label>
-              </div>
-            ) : (
-              <p className="text-xs text-white/40">Hanya admin dapat membuat pengumuman resmi.</p>
-            )}
-            {errorMessage && <p className="text-sm text-rose-300">{errorMessage}</p>}
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-xs text-white/40">Maksimal 300 karakter</span>
-              <button
-                type="submit"
-                disabled={postButtonDisabled}
-                className="rounded-full bg-violet-500 px-5 py-2 text-sm font-semibold text-white transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {saving ? "Menyimpan..." : "Posting"}
-              </button>
+              {comment.author.id === currentUserId && (
+                <button
+                  onClick={() => deleteComment(comment.id)}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-white/20 hover:text-rose-400 self-start mt-1"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
+                  </svg>
+                </button>
+              )}
             </div>
-          </form>
+          ))}
         </div>
-
-        {announcements.length > 0 && (
-          <div className="mb-4 space-y-3">
-            <div className="rounded-3xl border border-amber-500/20 bg-amber-500/10 p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-amber-200">Papan Pengumuman</p>
-                  <p className="text-xs text-amber-100/70 mt-1">Pengumuman penting khusus anggota.</p>
-                </div>
-                <span className="text-[11px] uppercase tracking-[0.15em] text-amber-200/80">{announcements.length} pengumuman</span>
-              </div>
-            </div>
-            {announcements.map((post) => (
-              <div key={post.id} className="rounded-3xl border border-amber-500/20 bg-[#1f1b16] p-4">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-full bg-amber-500/20 ring-1 ring-amber-500/30 flex items-center justify-center text-sm font-semibold text-amber-200">
-                    {initials(post.author.full_name)}
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-white/90">{post.author.full_name}</p>
-                    <p className="text-xs text-white/40">@{post.author.username} · {timeAgo(post.created_at)}</p>
-                  </div>
-                </div>
-                <p className="text-sm text-white/80 leading-relaxed">{post.content}</p>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {loading ? (
-          <div className="space-y-3">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="bg-white/5 border border-white/8 rounded-2xl p-4 animate-pulse">
-                <div className="flex gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-full bg-white/10" />
-                  <div className="flex-1 space-y-2 py-1">
-                    <div className="h-3 bg-white/10 rounded w-1/3" />
-                    <div className="h-2.5 bg-white/8 rounded w-1/4" />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <div className="h-3 bg-white/8 rounded w-full" />
-                  <div className="h-3 bg-white/8 rounded w-4/6" />
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <motion.div className="space-y-3" animate="animate">
-            <AnimatePresence>
-              {feedPosts.map((post) => (
-                <PostCard key={post.id} post={post} currentUserId={currentUserId} />
-              ))}
-            </AnimatePresence>
-            {feedPosts.length === 0 ? (
-              <div className="text-center py-16 text-white/30">
-                <p className="text-sm">Belum ada postingan biasa.</p>
-                <p className="text-xs mt-1">Silakan lihat pengumuman jika sudah ada, atau mulai berbagi.</p>
-              </div>
-            ) : null}
-          </motion.div>
-        )}
-      </div>
+      )}
     </div>
   );
 }
