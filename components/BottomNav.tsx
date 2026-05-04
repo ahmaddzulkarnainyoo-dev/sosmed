@@ -7,7 +7,6 @@ import { createClient } from '@/lib/supabase/client';
 
 export default function BottomNav() {
   const pathname = usePathname();
-  const [unreadCount, setUnreadCount] = useState(0);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const supabase = createClient();
 
@@ -15,8 +14,19 @@ export default function BottomNav() {
     const checkUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       setIsLoggedIn(!!user);
-      if (!user) return;
+    };
+    checkUser();
+  }, []);
 
+  // Sembunyikan jika user belum login
+  if (!isLoggedIn) return null;
+
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    const fetchUnread = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
       const { count } = await supabase
         .from('notifications')
         .select('*', { count: 'exact', head: true })
@@ -24,7 +34,7 @@ export default function BottomNav() {
         .eq('is_read', false);
       setUnreadCount(count || 0);
     };
-    checkUser();
+    fetchUnread();
 
     const channel = supabase
       .channel('notifications')
@@ -39,9 +49,6 @@ export default function BottomNav() {
 
     return () => { supabase.removeChannel(channel); };
   }, []);
-
-  // Jika belum login, jangan tampilkan apa-apa
-  if (!isLoggedIn) return null;
 
   const navItems = [
     { name: 'Beranda', href: '/feed', icon: '🏠', activeIcon: '🏠' },
@@ -65,11 +72,11 @@ export default function BottomNav() {
           >
             <div className="relative">
               <span className="text-2xl">{isActive ? item.activeIcon : item.icon}</span>
-              {item.badge ? (
+              {item.badge > 0 && (
                 <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">
                   {item.badge > 9 ? '9+' : item.badge}
                 </span>
-              ) : null}
+              )}
             </div>
             <span className="text-[11px] mt-0.5">{item.name}</span>
           </Link>
