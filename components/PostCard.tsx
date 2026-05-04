@@ -6,7 +6,27 @@ import { createClient } from '@/lib/supabase/client';
 import { formatDistanceToNow } from 'date-fns';
 import { id } from 'date-fns/locale';
 
-export default function PostCard({ post, currentUserId, onLikeUpdate }) {
+type PostCardProps = {
+  post: {
+    id: string;
+    content: string;
+    image_url?: string | null;
+    created_at: string;
+    likes_count: number;
+    user_liked: boolean;
+    profiles: {
+      id: string;
+      username: string;
+      full_name?: string | null;
+      avatar_url?: string | null;
+      role?: string | null;
+    };
+  };
+  currentUserId: string;
+  onLikeUpdate: () => void;
+};
+
+export default function PostCard({ post, currentUserId, onLikeUpdate }: PostCardProps) {
   const [liked, setLiked] = useState(post.user_liked);
   const [likesCount, setLikesCount] = useState(post.likes_count);
   const [deleting, setDeleting] = useState(false);
