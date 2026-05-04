@@ -13,32 +13,32 @@ export default function BottomNavWithPost() {
   const supabase = createClient();
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      setIsLoggedIn(!!session?.user);
-      if (session?.user) fetchUnreadCount(session.user.id);
-    });
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    const checkUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
       setIsLoggedIn(!!user);
-      if (user) fetchUnreadCount(user.id);
-    });
-    return () => subscription.unsubscribe();
-  }, []);
+      if (user) {
+        const { count } = await supabase
+          .from('notifications')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .eq('is_read', false);
+        setUnreadCount(count || 0);
+      }
+    };
+    checkUser();
 
-  const fetchUnreadCount = async (userId: string) => {
-    const { count } = await supabase
-      .from('notifications')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .eq('is_read', false);
-    setUnreadCount(count || 0);
-  };
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsLoggedIn(!!session?.user);
+    });
+    return () => listener?.subscription.unsubscribe();
+  }, []);
 
   if (!isLoggedIn) return null;
 
   const navItems = [
     { name: 'Beranda', href: '/feed', icon: '🏠' },
-    { name: 'Direktori', href: '/directory', icon: '🔍' },
-    { name: 'Tambah', href: '/create-post', icon: '➕', isCenter: true }, // tombol tengah
+    { name: 'Direktori', href: '/directory', icon: '👥' },
+    { name: 'Posting', href: '/create-post', icon: '➕', isCenter: true },
     { name: 'Notifikasi', href: '/notifications', icon: '❤️', badge: unreadCount },
     { name: 'Profil', href: '/profile/me', icon: '👤' },
   ];
@@ -52,10 +52,9 @@ export default function BottomNavWithPost() {
             <button
               key={item.name}
               onClick={() => router.push('/create-post')}
-              className="flex flex-col items-center py-1 px-4 rounded-full bg-blue-600 text-white shadow-lg -mt-4"
+              className="flex flex-col items-center justify-center bg-blue-600 text-white rounded-full w-12 h-12 -mt-6 shadow-md"
             >
               <span className="text-2xl">{item.icon}</span>
-              <span className="text-[10px]">{item.name}</span>
             </button>
           );
         }
