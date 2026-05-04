@@ -19,8 +19,8 @@ interface Post {
     avatar_url: string;
     role: string;
   };
-  likes_count?: number;
-  user_liked?: boolean;
+  likes_count: number;
+  user_liked: boolean;   // ← wajib boolean, tidak optional
 }
 
 export default function FeedWithFollow({ currentUserId, userRole }: { currentUserId: string; userRole: string }) {
@@ -41,16 +41,14 @@ export default function FeedWithFollow({ currentUserId, userRole }: { currentUse
     const from = currentPage * pageSize;
     const to = from + pageSize - 1;
 
-    let query = supabase
+    const { data: postsData, error } = await supabase
       .from('posts')
       .select(`
         *,
         profiles (id, username, full_name, avatar_url, role)
-      `, { count: 'exact' })
+      `)
       .order('created_at', { ascending: false })
       .range(from, to);
-
-    const { data: postsData, error, count } = await query;
 
     if (error) {
       console.error(error);
@@ -66,7 +64,7 @@ export default function FeedWithFollow({ currentUserId, userRole }: { currentUse
     const likedPostIds = new Set(likesData?.map((l) => l.post_id) || []);
 
     // Hitung jumlah like per post
-    const postsWithCounts = await Promise.all(
+    const postsWithCounts: Post[] = await Promise.all(
       (postsData || []).map(async (post) => {
         const { count } = await supabase
           .from('likes')
@@ -75,7 +73,7 @@ export default function FeedWithFollow({ currentUserId, userRole }: { currentUse
         return {
           ...post,
           likes_count: count || 0,
-          user_liked: likedPostIds.has(post.id),
+          user_liked: likedPostIds.has(post.id), // selalu boolean
         };
       })
     );
@@ -93,12 +91,10 @@ export default function FeedWithFollow({ currentUserId, userRole }: { currentUse
     setLoading(false);
   }, [page, pageSize, currentUserId]);
 
-  // Load initial data
   useEffect(() => {
     fetchPosts(true);
   }, []);
 
-  // Load more when scrolling to bottom
   useEffect(() => {
     if (inView && hasMore && !loadingRef.current && !loading) {
       fetchPosts();
