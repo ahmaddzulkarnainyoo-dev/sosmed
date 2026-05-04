@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 
 export default function BottomNav() {
   const pathname = usePathname();
+  console.log('BottomNav rendered, pathname:', pathname); // untuk debugging
 
   const navItems = [
     { name: 'Beranda', href: '/feed', icon: '🏠' },
@@ -14,19 +15,13 @@ export default function BottomNav() {
   ];
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around items-center py-2 px-4 z-50 md:hidden">
+    <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, backgroundColor: 'white', borderTop: '1px solid #ddd', display: 'flex', justifyContent: 'space-around', padding: '8px', zIndex: 9999 }}>
       {navItems.map((item) => {
-        const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+        const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
         return (
-          <Link
-            key={item.name}
-            href={item.href}
-            className={`flex flex-col items-center text-xs ${
-              isActive ? 'text-blue-600' : 'text-gray-500'
-            }`}
-          >
-            <span className="text-2xl">{item.icon}</span>
-            <span>{item.name}</span>
+          <Link key={item.name} href={item.href} style={{ textDecoration: 'none', color: isActive ? 'blue' : 'gray', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <span style={{ fontSize: '24px' }}>{item.icon}</span>
+            <span style={{ fontSize: '12px' }}>{item.name}</span>
           </Link>
         );
       })}
