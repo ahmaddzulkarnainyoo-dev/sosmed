@@ -1,6 +1,7 @@
 import TopNavbar from '@/components/TopNavbar';
+import { ReactNode } from 'react';
 
-export default function RootLayout({ children }) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html>
       <body>
