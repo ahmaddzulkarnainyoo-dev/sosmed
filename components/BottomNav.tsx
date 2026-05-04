@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client';
 export default function BottomNav() {
   const pathname = usePathname();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const supabase = createClient();
 
   useEffect(() => {
@@ -18,10 +19,7 @@ export default function BottomNav() {
     checkUser();
   }, []);
 
-  // Sembunyikan jika user belum login
   if (!isLoggedIn) return null;
-
-  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     const fetchUnread = async () => {
@@ -72,11 +70,11 @@ export default function BottomNav() {
           >
             <div className="relative">
               <span className="text-2xl">{isActive ? item.activeIcon : item.icon}</span>
-              {item.badge > 0 && (
+              {item.badge ? (
                 <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">
                   {item.badge > 9 ? '9+' : item.badge}
                 </span>
-              )}
+              ) : null}
             </div>
             <span className="text-[11px] mt-0.5">{item.name}</span>
           </Link>
