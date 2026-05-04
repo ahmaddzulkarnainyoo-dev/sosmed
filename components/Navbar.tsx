@@ -7,11 +7,13 @@ import { createClient } from '@/lib/supabase/client';
 export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const supabase = createClient();
 
   useEffect(() => {
-    const fetchUnreadCount = async () => {
+    const checkUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
+      setIsLoggedIn(!!user);
       if (!user) return;
       const { count } = await supabase
         .from('notifications')
@@ -20,20 +22,39 @@ export default function Navbar() {
         .eq('is_read', false);
       setUnreadCount(count || 0);
     };
-    fetchUnreadCount();
+    checkUser();
 
-    // Subscribe ke notifikasi baru (realtime)
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsLoggedIn(!!session?.user);
+    });
+
     const channel = supabase
       .channel('notifications')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (payload) => {
-        if (payload.new.user_id === supabase.auth.getUser().then(({ data }) => data.user?.id)) {
-          setUnreadCount((prev) => prev + 1);
-        }
+        supabase.auth.getUser().then(({ data }) => {
+          if (data.user && payload.new.user_id === data.user.id) {
+            setUnreadCount(prev => prev + 1);
+          }
+        });
       })
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      listener?.subscription.unsubscribe();
+      supabase.removeChannel(channel);
+    };
   }, []);
+
+  // Tampilkan navbar hanya jika login (atau bisa tetap tampil dengan menu login)
+  if (!isLoggedIn) {
+    return (
+      <nav className="bg-white shadow-sm sticky top-0 z-50">
+        <div className="max-w-6xl mx-auto px-4 py-3">
+          <Link href="/" className="font-bold text-xl text-blue-600">Himlab</Link>
+        </div>
+      </nav>
+    );
+  }
 
   return (
     <nav className="bg-white/80 backdrop-blur-md shadow-sm sticky top-0 z-50 border-b border-gray-100">

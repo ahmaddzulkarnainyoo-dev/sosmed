@@ -1,9 +1,9 @@
 'use client';
 
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import Link from 'next/link';
 
 export default function BottomNav() {
   const pathname = usePathname();
@@ -12,48 +12,34 @@ export default function BottomNav() {
   const supabase = createClient();
 
   useEffect(() => {
-    const checkUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setIsLoggedIn(!!session?.user);
+      if (session?.user) fetchUnreadCount(session.user.id);
+    });
+    supabase.auth.getUser().then(({ data: { user } }) => {
       setIsLoggedIn(!!user);
-    };
-    checkUser();
+      if (user) fetchUnreadCount(user.id);
+    });
+    return () => subscription.unsubscribe();
   }, []);
+
+  const fetchUnreadCount = async (userId: string) => {
+    const { count } = await supabase
+      .from('notifications')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('is_read', false);
+    setUnreadCount(count || 0);
+  };
 
   if (!isLoggedIn) return null;
 
-  useEffect(() => {
-    const fetchUnread = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const { count } = await supabase
-        .from('notifications')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .eq('is_read', false);
-      setUnreadCount(count || 0);
-    };
-    fetchUnread();
-
-    const channel = supabase
-      .channel('notifications')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (payload) => {
-        supabase.auth.getUser().then(({ data }) => {
-          if (data.user && payload.new.user_id === data.user.id) {
-            setUnreadCount(prev => prev + 1);
-          }
-        });
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, []);
-
   const navItems = [
-    { name: 'Beranda', href: '/feed', icon: '🏠', activeIcon: '🏠' },
-    { name: 'Cari', href: '/directory', icon: '🔍', activeIcon: '🔍' },
-    { name: 'Notifikasi', href: '/notifications', icon: '❤️', activeIcon: '❤️', badge: unreadCount },
-    { name: 'Pesan', href: '/messages', icon: '💬', activeIcon: '💬' },
-    { name: 'Profil', href: '/profile/me', icon: '👤', activeIcon: '👤' },
+    { name: 'Beranda', href: '/feed', icon: '🏠' },
+    { name: 'Cari', href: '/directory', icon: '🔍' },
+    { name: 'Notifikasi', href: '/notifications', icon: '❤️', badge: unreadCount },
+    { name: 'Pesan', href: '/messages', icon: '💬' },
+    { name: 'Profil', href: '/profile/me', icon: '👤' },
   ];
 
   return (
@@ -69,7 +55,7 @@ export default function BottomNav() {
             }`}
           >
             <div className="relative">
-              <span className="text-2xl">{isActive ? item.activeIcon : item.icon}</span>
+              <span className="text-2xl">{item.icon}</span>
               {item.badge ? (
                 <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">
                   {item.badge > 9 ? '9+' : item.badge}
