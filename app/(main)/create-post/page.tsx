@@ -15,7 +15,7 @@ export default function CreatePostPage() {
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      if (!data.user) router.push('/auth');
+      if (!data.user) router.push('/');
       else setUserId(data.user.id);
     });
   }, []);
@@ -28,23 +28,29 @@ export default function CreatePostPage() {
       user_id: userId,
       content: content.trim(),
       image_url: imageUrl || null,
-      is_announcement: false, // postingan biasa (bukan pengumuman)
+      is_announcement: false,
     });
     if (error) alert('Gagal: ' + error.message);
     else {
-      setContent('');
-      setImageUrl('');
       router.push('/feed');
     }
     setLoading(false);
   };
 
   return (
-    <div className="max-w-2xl mx-auto p-4 pb-20">
-      <h1 className="text-2xl font-bold mb-4">Buat Postingan Baru</h1>
-      <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow p-4">
+    <div className="max-w-2xl mx-auto px-4 pt-4 pb-24">
+      <div className="flex items-center gap-3 mb-4">
+        <button onClick={() => router.back()} className="p-2 rounded-full hover:bg-gray-100 transition-colors">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+        </button>
+        <h1 className="text-lg font-bold text-gray-900">Buat Postingan</h1>
+      </div>
+
+      <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-gray-100 p-4">
         <textarea
-          className="w-full border rounded-lg p-3"
+          className="w-full p-3 text-sm text-gray-900 placeholder-gray-400 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none bg-white"
           rows={5}
           placeholder="Apa yang sedang kamu pikirkan?"
           value={content}
@@ -52,12 +58,23 @@ export default function CreatePostPage() {
         />
         <div className="mt-3">
           <ImageUploader onUploadComplete={setImageUrl} />
-          {imageUrl && <img src={imageUrl} className="mt-2 h-32 rounded object-cover" />}
+          {imageUrl && (
+            <div className="relative mt-2 inline-block">
+              <img src={imageUrl} className="h-32 rounded-xl object-cover" />
+              <button
+                type="button"
+                onClick={() => setImageUrl('')}
+                className="absolute -top-2 -right-2 bg-gray-800 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center"
+              >
+                ×
+              </button>
+            </div>
+          )}
         </div>
         <button
           type="submit"
           disabled={loading || !content.trim()}
-          className="mt-4 w-full bg-blue-600 text-white py-2 rounded-lg font-semibold"
+          className="mt-4 w-full bg-blue-600 disabled:bg-blue-300 text-white py-2.5 rounded-xl text-sm font-semibold transition-colors"
         >
           {loading ? 'Memposting...' : 'Posting'}
         </button>
