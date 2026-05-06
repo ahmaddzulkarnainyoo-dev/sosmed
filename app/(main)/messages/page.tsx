@@ -11,6 +11,7 @@ interface Message {
   id: string;
   content: string;
   sender_id: string;
+  receiver_id: string;  // ← tambah ini
   created_at: string;
 }
 
