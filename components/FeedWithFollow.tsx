@@ -20,10 +20,38 @@ interface Post {
     role: string;
   };
   likes_count: number;
-  user_liked: boolean;   // ← wajib boolean, tidak optional
+  user_liked: boolean;
 }
 
-export default function FeedWithFollow({ currentUserId, userRole }: { currentUserId: string; userRole: string }) {
+function PostSkeleton() {
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden animate-pulse">
+      <div className="flex items-center gap-3 px-4 pt-3 pb-2">
+        <div className="w-10 h-10 rounded-full bg-gray-200" />
+        <div className="flex-1 space-y-1.5">
+          <div className="h-3 bg-gray-200 rounded w-32" />
+          <div className="h-2.5 bg-gray-100 rounded w-20" />
+        </div>
+      </div>
+      <div className="px-4 pb-3 space-y-2">
+        <div className="h-3 bg-gray-100 rounded w-full" />
+        <div className="h-3 bg-gray-100 rounded w-4/5" />
+      </div>
+      <div className="px-4 py-2.5 border-t border-gray-50 flex gap-5">
+        <div className="h-4 w-12 bg-gray-100 rounded" />
+        <div className="h-4 w-20 bg-gray-100 rounded" />
+      </div>
+    </div>
+  );
+}
+
+export default function FeedWithFollow({
+  currentUserId,
+  userRole,
+}: {
+  currentUserId: string;
+  userRole: string;
+}) {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasMore, setHasMore] = useState(true);
@@ -31,65 +59,74 @@ export default function FeedWithFollow({ currentUserId, userRole }: { currentUse
   const pageSize = 5;
   const loadingRef = useRef(false);
   const supabase = createClient();
-  const { ref, inView } = useInView();
+  const { ref, inView } = useInView({ threshold: 0.1 });
 
-  const fetchPosts = useCallback(async (reset = false) => {
-    if (loadingRef.current) return;
-    loadingRef.current = true;
+  const fetchPosts = useCallback(
+    async (reset = false) => {
+      if (loadingRef.current) return;
+      loadingRef.current = true;
 
-    const currentPage = reset ? 0 : page;
-    const from = currentPage * pageSize;
-    const to = from + pageSize - 1;
+      const currentPage = reset ? 0 : page;
+      const from = currentPage * pageSize;
+      const to = from + pageSize - 1;
 
-    const { data: postsData, error } = await supabase
-      .from('posts')
-      .select(`
-        *,
-        profiles (id, username, full_name, avatar_url, role)
-      `)
-      .order('created_at', { ascending: false })
-      .range(from, to);
-
-    if (error) {
-      console.error(error);
-      loadingRef.current = false;
-      return;
-    }
-
-    // Ambil likes user saat ini
-    const { data: likesData } = await supabase
-      .from('likes')
-      .select('post_id')
-      .eq('user_id', currentUserId);
-    const likedPostIds = new Set(likesData?.map((l) => l.post_id) || []);
-
-    // Hitung jumlah like per post
-    const postsWithCounts: Post[] = await Promise.all(
-      (postsData || []).map(async (post) => {
-        const { count } = await supabase
+      const [{ data: postsData, error }, { data: likesData }] = await Promise.all([
+        supabase
+          .from('posts')
+          .select('*, profiles (id, username, full_name, avatar_url, role)')
+          .order('is_announcement', { ascending: false })
+          .order('created_at', { ascending: false })
+          .range(from, to),
+        supabase
           .from('likes')
-          .select('*', { count: 'exact', head: true })
-          .eq('post_id', post.id);
-        return {
-          ...post,
-          likes_count: count || 0,
-          user_liked: likedPostIds.has(post.id), // selalu boolean
-        };
-      })
-    );
+          .select('post_id')
+          .eq('user_id', currentUserId),
+      ]);
 
-    if (reset) {
-      setPosts(postsWithCounts);
-      setPage(1);
-    } else {
-      setPosts((prev) => [...prev, ...postsWithCounts]);
-      setPage((prev) => prev + 1);
-    }
+      if (error) {
+        console.error(error);
+        loadingRef.current = false;
+        return;
+      }
 
-    setHasMore(postsData?.length === pageSize);
-    loadingRef.current = false;
-    setLoading(false);
-  }, [page, pageSize, currentUserId]);
+      const likedPostIds = new Set(likesData?.map((l) => l.post_id) || []);
+
+      // Fetch semua like counts sekaligus lewat RPC atau aggregasi
+      const postIds = (postsData || []).map((p) => p.id);
+      const { data: likeCounts } = await supabase
+        .from('likes')
+        .select('post_id')
+        .in('post_id', postIds);
+
+      const countMap: Record<string, number> = {};
+      likeCounts?.forEach(({ post_id }) => {
+        countMap[post_id] = (countMap[post_id] || 0) + 1;
+      });
+
+      const postsWithCounts: Post[] = (postsData || []).map((post) => ({
+        ...post,
+        likes_count: countMap[post.id] || 0,
+        user_liked: likedPostIds.has(post.id),
+      }));
+
+      if (reset) {
+        setPosts(postsWithCounts);
+        setPage(1);
+      } else {
+        setPosts((prev) => {
+          const existingIds = new Set(prev.map((p) => p.id));
+          const newPosts = postsWithCounts.filter((p) => !existingIds.has(p.id));
+          return [...prev, ...newPosts];
+        });
+        setPage((prev) => prev + 1);
+      }
+
+      setHasMore((postsData?.length || 0) === pageSize);
+      loadingRef.current = false;
+      setLoading(false);
+    },
+    [page, currentUserId]
+  );
 
   useEffect(() => {
     fetchPosts(true);
@@ -101,30 +138,51 @@ export default function FeedWithFollow({ currentUserId, userRole }: { currentUse
     }
   }, [inView, hasMore, loading]);
 
-  if (loading && posts.length === 0) return <div className="p-4 text-center">Memuat feed...</div>;
-
   return (
-    <div>
-      {userRole === 'admin' && <PostFormAdmin userId={currentUserId} onPost={() => fetchPosts(true)} />}
-      {posts.length === 0 && (
-        <p className="text-gray-500 text-center p-4">
-          Belum ada postingan. Admin bisa membuat pengumuman, anggota bisa posting nanti.
-        </p>
+    <div className="space-y-3">
+      {userRole === 'admin' && (
+        <PostFormAdmin userId={currentUserId} onPost={() => fetchPosts(true)} />
       )}
-      <div className="space-y-4">
-        {posts.map((post) => (
-          <PostCard key={post.id} post={post} currentUserId={currentUserId} onLikeUpdate={() => fetchPosts(true)} />
-        ))}
-      </div>
+
+      {loading && posts.length === 0 ? (
+        <>
+          <PostSkeleton />
+          <PostSkeleton />
+          <PostSkeleton />
+        </>
+      ) : posts.length === 0 ? (
+        <div className="text-center py-16 text-gray-400">
+          <p className="text-4xl mb-3">📭</p>
+          <p className="text-sm">Belum ada postingan.</p>
+        </div>
+      ) : (
+        posts.map((post) => (
+          <PostCard
+            key={post.id}
+            post={post}
+            currentUserId={currentUserId}
+            userRole={userRole}
+            onLikeUpdate={() => fetchPosts(true)}
+          />
+        ))
+      )}
+
       {hasMore && (
-        <div ref={ref} className="py-4 text-center text-gray-400 text-sm">
-          Memuat lebih banyak...
+        <div ref={ref} className="py-6 text-center">
+          <div className="inline-flex gap-1">
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-bounce"
+                style={{ animationDelay: `${i * 0.15}s` }}
+              />
+            ))}
+          </div>
         </div>
       )}
+
       {!hasMore && posts.length > 0 && (
-        <div className="py-4 text-center text-gray-400 text-sm">
-          ✨ Sudah sampai bawah ✨
-        </div>
+        <p className="py-6 text-center text-gray-300 text-xs">— Sudah semua —</p>
       )}
     </div>
   );

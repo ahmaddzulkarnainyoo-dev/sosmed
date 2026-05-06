@@ -50,3 +50,37 @@ body {
   transform: translateY(-2px);
   box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.02);
 }
+/* Sembunyikan bottom navigation di layar lebar (desktop/tablet) */
+@media (min-width: 768px) {
+  .fixed.bottom-0.left-0.right-0 {
+    display: none !important;
+  }
+  /* Hapus padding bottom di desktop karena navigasi bawah hilang */
+  body {
+    padding-bottom: 0 !important;
+  }
+}
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Card style modern */
+.card {
+  background: white;
+  border-radius: 1rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  transition: all 0.2s;
+}
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+/* Efek hover untuk kartu postingan */
+.post-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.post-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px -8px rgba(0,0,0,0.12);
+}

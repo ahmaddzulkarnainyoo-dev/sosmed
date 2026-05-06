@@ -1,15 +1,17 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { useEffect, useState } from 'react';
 
 export default function TopNavbar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [user, setUser] = useState<any>(null);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const supabase = createClient();
-  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUser(data.user));
@@ -19,55 +21,93 @@ export default function TopNavbar() {
     return () => listener?.subscription.unsubscribe();
   }, []);
 
+  // Tutup dropdown kalau klik di luar
   useEffect(() => {
-    if (!user) return;
-    const fetchUnread = async () => {
-      const { count } = await supabase
-        .from('notifications')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .eq('is_read', false);
-      setUnreadCount(count || 0);
-    };
-    fetchUnread();
-  }, [user]);
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
-  if (!user) return null; // tidak muncul sebelum login
+  if (!user) return null;
 
-  const navItems = [
-    { name: 'Beranda', href: '/feed', icon: '🏠' },
-    { name: 'Direktori', href: '/directory', icon: '👥' },
-    { name: 'Notifikasi', href: '/notifications', icon: '❤️', badge: unreadCount },
-    { name: 'Pesan', href: '/messages', icon: '💬' },
+  const navLinks = [
+    { href: '/feed', label: 'Beranda' },
+    { href: '/directory', label: 'Direktori' },
+    { href: '/notifications', label: 'Notifikasi' },
+    { href: '/messages', label: 'Pesan' },
   ];
 
   return (
     <nav className="bg-white border-b border-gray-200 sticky top-0 z-50">
       <div className="max-w-6xl mx-auto px-4 flex justify-between items-center h-16">
-        <Link href="/feed" className="text-xl font-bold text-blue-600">Himlab</Link>
-        <div className="flex space-x-6">
-          {navItems.map((item) => (
-            <Link key={item.name} href={item.href} className={`relative flex items-center space-x-1 ${pathname === item.href ? 'text-blue-600' : 'text-gray-600'}`}>
-              <span className="text-xl">{item.icon}</span>
-              <span className="hidden sm:inline">{item.name}</span>
-              {item.badge ? (
-                <span className="absolute -top-2 -right-3 bg-red-500 text-white text-xs rounded-full px-1 min-w-[18px] h-[18px] flex items-center justify-center">
-                  {item.badge > 9 ? '9+' : item.badge}
-                </span>
-              ) : null}
+        <Link href="/feed" className="text-xl font-bold text-blue-600">
+          Winatra
+        </Link>
+
+        <div className="hidden md:flex items-center space-x-6">
+          {navLinks.map(({ href, label }) => (
+            <Link
+              key={href}
+              href={href}
+              className={`text-sm font-medium transition-colors ${
+                pathname === href ? 'text-blue-600' : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              {label}
             </Link>
           ))}
-          <Link href="/profile/me" className={`flex items-center space-x-1 ${pathname.startsWith('/profile/') ? 'text-blue-600' : 'text-gray-600'}`}>
-            <span className="text-xl">👤</span>
-            <span className="hidden sm:inline">Profil</span>
-          </Link>
+
           <button
-            onClick={async () => { await supabase.auth.signOut(); window.location.href = '/'; }}
-            className="text-red-500 flex items-center space-x-1"
+            onClick={() => router.push('/create-post')}
+            className="bg-blue-600 text-white px-4 py-1.5 rounded-full text-sm font-medium hover:bg-blue-700 transition-colors"
           >
-            <span className="text-xl">🚪</span>
-            <span className="hidden sm:inline">Keluar</span>
+            + Posting
           </button>
+
+          {/* Avatar + Dropdown */}
+          <div className="relative" ref={dropdownRef}>
+            <button onClick={() => setDropdownOpen(prev => !prev)}>
+              <img
+                src={user.user_metadata?.avatar_url || '/default-avatar.png'}
+                className="w-8 h-8 rounded-full object-cover ring-2 ring-gray-200 hover:ring-blue-400 transition-all"
+                alt="avatar"
+              />
+            </button>
+
+            {dropdownOpen && (
+              <div className="absolute right-0 mt-2 w-48 bg-white shadow-xl rounded-xl border border-gray-100 py-1 z-50">
+                <Link
+                  href="/profile/me"
+                  onClick={() => setDropdownOpen(false)}
+                  className="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  Profil Saya
+                </Link>
+                <Link
+                  href="/profile/me/edit"
+                  onClick={() => setDropdownOpen(false)}
+                  className="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  Edit Profil
+                </Link>
+                <hr className="my-1 border-gray-100" />
+                <button
+                  onClick={async () => {
+                    await supabase.auth.signOut();
+                    setDropdownOpen(false);
+                    router.push('/auth');
+                  }}
+                  className="block w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50"
+                >
+                  Keluar
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </nav>
