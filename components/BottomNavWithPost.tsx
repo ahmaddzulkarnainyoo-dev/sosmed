@@ -26,7 +26,6 @@ export default function BottomNavWithPost() {
       }
     };
     checkUser();
-
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setIsLoggedIn(!!session?.user);
     });
@@ -35,49 +34,30 @@ export default function BottomNavWithPost() {
 
   if (!isLoggedIn) return null;
 
-  const navItems = [
-    { name: 'Beranda', href: '/feed', icon: '🏠' },
-    { name: 'Direktori', href: '/directory', icon: '👥' },
-    { name: 'Posting', href: '/create-post', icon: '➕', isCenter: true },
-    { name: 'Notifikasi', href: '/notifications', icon: '❤️', badge: unreadCount },
-    { name: 'Profil', href: '/profile/me', icon: '👤' },
-  ];
-
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around items-center py-2 px-2 z-50 shadow-lg md:hidden">
-      {navItems.map((item) => {
-        const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
-        if (item.isCenter) {
-          return (
-            <button
-              key={item.name}
-              onClick={() => router.push('/create-post')}
-              className="flex flex-col items-center justify-center bg-blue-600 text-white rounded-full w-12 h-12 -mt-6 shadow-md"
-            >
-              <span className="text-2xl">{item.icon}</span>
-            </button>
-          );
-        }
-        return (
-          <Link
-            key={item.name}
-            href={item.href}
-            className={`flex flex-col items-center py-1 px-3 rounded-full transition-all ${
-              isActive ? 'text-blue-600' : 'text-gray-500'
-            }`}
-          >
-            <div className="relative">
-              <span className="text-2xl">{item.icon}</span>
-              {item.badge ? (
-                <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">
-                  {item.badge > 9 ? '9+' : item.badge}
-                </span>
-              ) : null}
-            </div>
-            <span className="text-[11px] mt-0.5">{item.name}</span>
-          </Link>
-        );
-      })}
+      <Link href="/feed" className={`flex flex-col items-center ${pathname === '/feed' ? 'text-blue-600' : 'text-gray-500'}`}>
+        <span className="text-2xl">🏠</span>
+        <span className="text-[11px]">Beranda</span>
+      </Link>
+      <Link href="/directory" className={`flex flex-col items-center ${pathname === '/directory' ? 'text-blue-600' : 'text-gray-500'}`}>
+        <span className="text-2xl">👥</span>
+        <span className="text-[11px]">Direktori</span>
+      </Link>
+      {/* Tombol posting di tengah */}
+      <button onClick={() => router.push('/create-post')} className="flex flex-col items-center justify-center bg-blue-600 text-white rounded-full w-12 h-12 -mt-6 shadow-md">
+        <span className="text-2xl">+</span>
+        <span className="text-[10px]">Posting</span>
+      </button>
+      <Link href="/notifications" className={`flex flex-col items-center relative ${pathname === '/notifications' ? 'text-blue-600' : 'text-gray-500'}`}>
+        <span className="text-2xl">❤️</span>
+        {unreadCount > 0 && <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[10px] rounded-full px-1">{unreadCount > 9 ? '9+' : unreadCount}</span>}
+        <span className="text-[11px]">Notifikasi</span>
+      </Link>
+      <Link href="/profile/me" className={`flex flex-col items-center ${pathname.startsWith('/profile/') ? 'text-blue-600' : 'text-gray-500'}`}>
+        <span className="text-2xl">👤</span>
+        <span className="text-[11px]">Profil</span>
+      </Link>
     </div>
   );
 }
