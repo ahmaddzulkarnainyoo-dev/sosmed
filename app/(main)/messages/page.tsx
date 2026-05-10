@@ -1,170 +1,153 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
 import { id } from 'date-fns/locale';
 
-interface Message {
-  id: string;
-  content: string;
-  sender_id: string;
-  receiver_id: string;
-  created_at: string;
+interface Conversation {
+  userId: string;
+  username: string;
+  full_name: string;
+  avatar_url: string;
+  lastMessage: string;
+  lastTime: string;
 }
 
-export default function ChatDetailPage() {
-  const params = useParams();
-  const username = params.username as string;
+export default function MessagesPage() {
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const router = useRouter();
   const supabase = createClient();
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [receiver, setReceiver] = useState<any>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [newMessage, setNewMessage] = useState('');
-  const [sending, setSending] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchConversations = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push('/'); return; }
       setCurrentUserId(user.id);
-      const { data: receiverData } = await supabase
-        .from('profiles')
-        .select('id, username, full_name, avatar_url')
-        .eq('username', username)
-        .single();
-      if (!receiverData) { router.push('/directory'); return; }
-      setReceiver(receiverData);
-      setLoading(false);
-    };
-    fetchData();
-  }, [username]);
 
-  useEffect(() => {
-    if (!currentUserId || !receiver) return;
-
-    const fetchMessages = async () => {
-      const { data } = await supabase
+      // Ambil semua pesan yang melibatkan user ini
+      const { data: messages } = await supabase
         .from('messages')
         .select('*')
-        .or(`and(sender_id.eq.${currentUserId},receiver_id.eq.${receiver.id}),and(sender_id.eq.${receiver.id},receiver_id.eq.${currentUserId})`)
-        .order('created_at', { ascending: true });
-      if (data) setMessages(data);
-    };
-    fetchMessages();
+        .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
+        .order('created_at', { ascending: false });
 
-    const channel = supabase
-      .channel(`chat-${currentUserId}-${receiver.id}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
-        const newMsg = payload.new as Message;
-        if (
-          (newMsg.sender_id === currentUserId && newMsg.receiver_id === receiver.id) ||
-          (newMsg.sender_id === receiver.id && newMsg.receiver_id === currentUserId)
-        ) {
-          setMessages(prev => [...prev, newMsg]);
+      if (!messages) { setLoading(false); return; }
+
+      // Ambil unique conversation partners
+      const partnerIds = new Set<string>();
+      const lastMessages: Record<string, typeof messages[0]> = {};
+
+      messages.forEach(msg => {
+        const partnerId = msg.sender_id === user.id ? msg.receiver_id : msg.sender_id;
+        if (!partnerIds.has(partnerId)) {
+          partnerIds.add(partnerId);
+          lastMessages[partnerId] = msg;
         }
-      })
-      .subscribe();
+      });
 
-    return () => { supabase.removeChannel(channel); };
-  }, [currentUserId, receiver]);
+      if (partnerIds.size === 0) { setLoading(false); return; }
 
-  // Auto scroll ke bawah
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+      // Ambil profil semua partner sekaligus
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, username, full_name, avatar_url')
+        .in('id', Array.from(partnerIds));
 
-  const sendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newMessage.trim() || sending || !currentUserId || !receiver) return;
-    setSending(true);
-    await supabase.from('messages').insert({
-      sender_id: currentUserId,
-      receiver_id: receiver.id,
-      content: newMessage.trim(),
-    });
-    setNewMessage('');
-    setSending(false);
-  };
+      const convos: Conversation[] = (profiles || []).map(profile => ({
+        userId: profile.id,
+        username: profile.username,
+        full_name: profile.full_name,
+        avatar_url: profile.avatar_url,
+        lastMessage: lastMessages[profile.id]?.content || '',
+        lastTime: lastMessages[profile.id]?.created_at || '',
+      }));
 
-  if (loading) return (
-    <div className="max-w-2xl mx-auto px-4 pt-4">
-      <div className="animate-pulse flex items-center gap-3 mb-4">
-        <div className="w-10 h-10 rounded-full bg-gray-200" />
-        <div className="h-4 bg-gray-200 rounded w-32" />
-      </div>
-    </div>
-  );
+      // Sort by last message time
+      convos.sort((a, b) => new Date(b.lastTime).getTime() - new Date(a.lastTime).getTime());
+      setConversations(convos);
+      setLoading(false);
+    };
+
+    fetchConversations();
+  }, []);
 
   return (
-    <div className="max-w-2xl mx-auto flex flex-col h-[calc(100vh-64px)]">
-      {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 bg-white border-b border-gray-100 sticky top-16">
-        <Link href="/messages" className="p-1.5 rounded-full hover:bg-gray-100 transition-colors">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M19 12H5M12 19l-7-7 7-7"/>
-          </svg>
-        </Link>
-        <img src={receiver?.avatar_url || '/default-avatar.png'} className="w-9 h-9 rounded-full object-cover" />
-        <div>
-          <p className="font-semibold text-sm text-gray-900">{receiver?.full_name || receiver?.username}</p>
-          <p className="text-xs text-gray-400">@{receiver?.username}</p>
-        </div>
+    <div className="max-w-2xl mx-auto px-4 pt-4 pb-24">
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-lg font-bold text-gray-900">Pesan</h1>
         <Link
-          href={`/profile/${receiver?.username}`}
-          className="ml-auto text-xs text-blue-500 hover:underline"
+          href="/directory"
+          className="text-sm text-blue-500 hover:underline"
         >
-          Lihat profil
+          + Pesan baru
         </Link>
       </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
-        {messages.length === 0 && (
-          <p className="text-center text-gray-400 text-sm py-8">Belum ada pesan. Mulai percakapan!</p>
-        )}
-        {messages.map(msg => {
-          const isMe = msg.sender_id === currentUserId;
-          return (
-            <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[70%] rounded-2xl px-4 py-2.5 ${
-                isMe ? 'bg-blue-600 text-white rounded-br-sm' : 'bg-gray-100 text-gray-900 rounded-bl-sm'
-              }`}>
-                <p className="text-sm leading-relaxed">{msg.content}</p>
-                <p className={`text-[10px] mt-1 ${isMe ? 'text-blue-200' : 'text-gray-400'}`}>
-                  {formatDistanceToNow(new Date(msg.created_at), { addSuffix: true, locale: id })}
-                </p>
+      {loading && (
+        <div className="space-y-3">
+          {[1, 2, 3].map(i => (
+            <div key={i} className="flex items-center gap-3 p-3 bg-white rounded-2xl animate-pulse">
+              <div className="w-12 h-12 rounded-full bg-gray-200 flex-shrink-0" />
+              <div className="flex-1 space-y-2">
+                <div className="h-3 bg-gray-200 rounded w-32" />
+                <div className="h-2.5 bg-gray-100 rounded w-48" />
               </div>
             </div>
-          );
-        })}
-        <div ref={bottomRef} />
-      </div>
+          ))}
+        </div>
+      )}
 
-      {/* Input */}
-      <form onSubmit={sendMessage} className="px-4 py-3 bg-white border-t border-gray-100 flex gap-2">
-        <input
-          type="text"
-          value={newMessage}
-          onChange={e => setNewMessage(e.target.value)}
-          placeholder="Ketik pesan..."
-          className="flex-1 bg-gray-100 text-gray-900 placeholder-gray-400 rounded-full px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-        <button
-          type="submit"
-          disabled={sending || !newMessage.trim()}
-          className="bg-blue-600 disabled:bg-blue-300 text-white w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-colors"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <path d="M22 2L11 13M22 2L15 22l-4-9-9-4 20-7z"/>
-          </svg>
-        </button>
-      </form>
+      {!loading && conversations.length === 0 && (
+        <div className="text-center py-16 text-gray-400">
+          <p className="text-4xl mb-3">💬</p>
+          <p className="text-sm mb-3">Belum ada percakapan.</p>
+          <Link
+            href="/directory"
+            className="text-sm text-blue-500 hover:underline"
+          >
+            Cari anggota untuk dikirim pesan
+          </Link>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        {conversations.map(convo => (
+          <Link
+            key={convo.userId}
+            href={`/messages/${convo.username}`}
+            className="flex items-center gap-3 p-3 bg-white rounded-2xl border border-gray-100 hover:border-blue-200 hover:shadow-sm transition-all"
+          >
+            <img
+              src={convo.avatar_url || '/default-avatar.png'}
+              className="w-12 h-12 rounded-full object-cover flex-shrink-0"
+              alt={convo.username}
+            />
+            <div className="flex-1 min-w-0">
+              <div className="flex justify-between items-baseline">
+                <p className="font-semibold text-sm text-gray-900 truncate">
+                  {convo.full_name || convo.username}
+                </p>
+                {convo.lastTime && (
+                  <span className="text-[10px] text-gray-400 flex-shrink-0 ml-2">
+                    {formatDistanceToNow(new Date(convo.lastTime), { addSuffix: false, locale: id })}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-gray-400 truncate mt-0.5">
+                {convo.lastMessage || '—'}
+              </p>
+            </div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-gray-300 flex-shrink-0">
+              <path d="M9 18l6-6-6-6"/>
+            </svg>
+          </Link>
+        ))}
+      </div>
     </div>
   );
 }
