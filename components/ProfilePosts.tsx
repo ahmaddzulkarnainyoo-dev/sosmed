@@ -31,8 +31,8 @@ export default function ProfilePosts({ userId, currentUserId }: { userId: string
     const [{ data: postsData }, { data: likesData }] = await Promise.all([
       supabase
         .from('posts')
-        .select('*, profiles!inner(id, username, full_name, avatar_url, role)')
-        .eq('user_id', userId)
+        .select('*, profiles:author_id (id, username, full_name, avatar_url, role)')
+        .eq('author_id', userId)
         .order('created_at', { ascending: false }),
       currentUserId
         ? supabase.from('likes').select('post_id').eq('user_id', currentUserId)
