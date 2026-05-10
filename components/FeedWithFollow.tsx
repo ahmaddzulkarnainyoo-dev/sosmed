@@ -73,7 +73,7 @@ export default function FeedWithFollow({
       const [{ data: postsData, error }, { data: likesData }] = await Promise.all([
         supabase
           .from('posts')
-          .select('*, profiles (id, username, full_name, avatar_url, role)')
+          .select('*, profiles:author_id (id, username, full_name, avatar_url, role)')
           .order('is_announcement', { ascending: false })
           .order('created_at', { ascending: false })
           .range(from, to),
@@ -162,7 +162,7 @@ export default function FeedWithFollow({
             post={post}
             currentUserId={currentUserId}
             userRole={userRole}
-            onLikeUpdate={() => fetchPosts(true)}
+            onLikeUpdate={() => {}}
           />
         ))
       )}

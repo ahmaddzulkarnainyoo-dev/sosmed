@@ -25,7 +25,7 @@ export default function CreatePostPage() {
     if (!content.trim() || loading || !userId) return;
     setLoading(true);
     const { error } = await supabase.from('posts').insert({
-      user_id: userId,
+      author_id: userId,
       content: content.trim(),
       image_url: imageUrl || null,
       is_announcement: false,

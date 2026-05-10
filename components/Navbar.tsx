@@ -65,7 +65,7 @@ export default function Navbar() {
           </Link>
           <div className="hidden md:flex space-x-6">
             <Link href="/feed" className="text-gray-700 hover:text-blue-600 transition">Beranda</Link>
-            <Link href="/directory" className="text-gray-700 hover:text-blue-600 transition">Direktori</Link>
+            <Link href="/directory" className="text-gray-700 hover:text-blue-600 transition">ANGGOTA</Link>
             <Link href="/messages" className="text-gray-700 hover:text-blue-600 transition">Pesan</Link>
             <Link href="/notifications" className="relative text-gray-700 hover:text-blue-600 transition">
               Notifikasi
@@ -89,7 +89,7 @@ function MobileMenu({ setMenuOpen, unreadCount }: { setMenuOpen: (v: boolean) =>
   return (
     <div className="md:hidden pb-4 space-y-2">
       <Link href="/feed" className="block hover:text-blue-600" onClick={() => setMenuOpen(false)}>Beranda</Link>
-      <Link href="/directory" className="block hover:text-blue-600" onClick={() => setMenuOpen(false)}>Direktori</Link>
+      <Link href="/directory" className="block hover:text-blue-600" onClick={() => setMenuOpen(false)}>ANGGOTA</Link>
       <Link href="/messages" className="block hover:text-blue-600" onClick={() => setMenuOpen(false)}>Pesan</Link>
       <Link href="/notifications" className="block hover:text-blue-600" onClick={() => setMenuOpen(false)}>
         Notifikasi {unreadCount > 0 && `(${unreadCount})`}
