@@ -84,3 +84,9 @@ html {
   transform: translateY(-2px);
   box-shadow: 0 12px 24px -8px rgba(0,0,0,0.12);
 }
+/* Pastikan input dan textarea selalu terbaca (override dark mode) */
+input, textarea, select {
+  color: #1f2937 !important;   /* teks gelap */
+  background-color: #ffffff !important;   /* latar putih */
+  border-color: #d1d5db !important;
+}
